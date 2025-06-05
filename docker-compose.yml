@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:80"
+      - "5001:443"
+    depends_on:
+      - db
+    environment:
+      - ConnectionStrings__Default=Server=localhost;Port=5432;Database=ArticlesTest;User Id=postgres;Password=1;
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: ArticlesTest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
