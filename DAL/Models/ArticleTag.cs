@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ArticlesTestTask.DAL.Models
-{    
+{
     /// <summary>
     /// Промежуточная таблица для связей "Статья-Тег"
     /// </summary>

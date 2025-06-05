@@ -1,4 +1,4 @@
-using ArticlesTestTask.Contracts.Requests;
+п»їusing ArticlesTestTask.Contracts.Requests;
 using ArticlesTestTask.DAL.Models;
 using ArticlesTestTask.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -20,7 +20,7 @@ namespace ArticlesTestTask.Controllers
         }
 
         /// <summary>
-        /// Получить статью по идентификатору
+        /// РџРѕР»СѓС‡РёС‚СЊ СЃС‚Р°С‚СЊСЋ РїРѕ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂСѓ
         /// </summary>
         [HttpGet("api/v1/articles/{id}")]
         public async Task<IActionResult> GetArticleById(long id)
@@ -41,7 +41,7 @@ namespace ArticlesTestTask.Controllers
         }
 
         /// <summary>
-        /// Получить список разделов
+        /// РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє СЂР°Р·РґРµР»РѕРІ
         /// </summary>
         [HttpGet("api/v1/sections")]
         public async Task<IActionResult> GetSections()
@@ -57,9 +57,9 @@ namespace ArticlesTestTask.Controllers
         }
 
         /// <summary>
-        /// Получить список статей в разделе
+        /// РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє СЃС‚Р°С‚РµР№ РІ СЂР°Р·РґРµР»Рµ
         /// </summary>
-        /// <param name="sectionId">id раздела</param>
+        /// <param name="sectionId">id СЂР°Р·РґРµР»Р°</param>
         /// <returns></returns>
         [HttpGet("api/v1/articles/bySection/{sectionId}")]
         public async Task<IActionResult> GetArticlesBySection(long sectionId)
@@ -75,15 +75,15 @@ namespace ArticlesTestTask.Controllers
         }
 
         /// <summary>
-        /// Создать статью
+        /// РЎРѕР·РґР°С‚СЊ СЃС‚Р°С‚СЊСЋ
         /// </summary>
-        /// <param name="item">Модель добавления статьи</param>
+        /// <param name="item">РњРѕРґРµР»СЊ РґРѕР±Р°РІР»РµРЅРёСЏ СЃС‚Р°С‚СЊРё</param>
         /// <returns></returns>
         [HttpPost("articles")]
         public async Task<IActionResult> CreateArticle([FromBody] ArticleCreateUpdateRequest item)
         {
             if (item.Tags.Count > 256)
-                return BadRequest("Допустим ввод не более 256 тегов");
+                return BadRequest("Р”РѕРїСѓСЃС‚РёРј РІРІРѕРґ РЅРµ Р±РѕР»РµРµ 256 С‚РµРіРѕРІ");
 
             var article = await _articleService.CreateArticle(item);
 
@@ -96,16 +96,16 @@ namespace ArticlesTestTask.Controllers
         }
 
         /// <summary>
-        /// Изменить статью
+        /// РР·РјРµРЅРёС‚СЊ СЃС‚Р°С‚СЊСЋ
         /// </summary>
-        /// <param name="id">Идентификатор статьи</param>
-        /// <param name="item">Модель измененной статьи</param>
+        /// <param name="id">РРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ СЃС‚Р°С‚СЊРё</param>
+        /// <param name="item">РњРѕРґРµР»СЊ РёР·РјРµРЅРµРЅРЅРѕР№ СЃС‚Р°С‚СЊРё</param>
         /// <returns></returns>
         [HttpPut("articles/{id}")]
         public async Task<IActionResult> UpdateArticle(long id, [FromBody] ArticleCreateUpdateRequest item)
         {
             if (item.Tags.Count > 256)
-                return BadRequest("Допустим ввод не более 256 тегов");
+                return BadRequest("Р”РѕРїСѓСЃС‚РёРј РІРІРѕРґ РЅРµ Р±РѕР»РµРµ 256 С‚РµРіРѕРІ");
 
             var article = await _articleService.UpdateArticle(id, item);
 
