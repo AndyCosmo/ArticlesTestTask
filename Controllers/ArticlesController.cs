@@ -109,7 +109,7 @@ namespace ArticlesTestTask.Controllers
 
             var article = await _articleService.UpdateArticle(id, item);
 
-            if (item == null)
+            if (article == null)
             {
                 return NotFound();
             }
