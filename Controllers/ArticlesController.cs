@@ -83,7 +83,9 @@ namespace ArticlesTestTask.Controllers
         public async Task<IActionResult> CreateArticle([FromBody] ArticleCreateUpdateRequest item)
         {
             if (item.Tags.Count > 256)
+            {
                 return BadRequest("Допустим ввод не более 256 тегов");
+            }
 
             var article = await _articleService.CreateArticle(item);
 
@@ -105,7 +107,9 @@ namespace ArticlesTestTask.Controllers
         public async Task<IActionResult> UpdateArticle(long id, [FromBody] ArticleCreateUpdateRequest item)
         {
             if (item.Tags.Count > 256)
+            {
                 return BadRequest("Допустим ввод не более 256 тегов");
+            }
 
             var article = await _articleService.UpdateArticle(id, item);
 
