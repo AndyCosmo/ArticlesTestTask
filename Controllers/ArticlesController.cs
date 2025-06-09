@@ -1,7 +1,8 @@
 ﻿using ArticlesTestTask.Contracts.Requests;
 using ArticlesTestTask.DAL.Models;
-using ArticlesTestTask.Services;
+using ArticlesTestTask.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 namespace ArticlesTestTask.Controllers
@@ -23,37 +24,51 @@ namespace ArticlesTestTask.Controllers
         /// Получить статью по идентификатору
         /// </summary>
         [HttpGet("api/v1/articles/{id}")]
-        public async Task<IActionResult> GetArticleById(long id)
+        public async Task<IActionResult> GetArticleById(long id, CancellationToken ct = default)
         {
-            var article = await _articleService.GetArticleById(id);
-
-            if (article == null)
+            try
             {
-                return NotFound();
+                var article = await _articleService.GetArticleById(id, ct);
+
+                if (article == null)
+                {
+                    return NotFound();
+                }
+
+                return new JsonResult(
+                    new { Success = true, Data = article },
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+                {
+                    StatusCode = StatusCodes.Status200OK
+                };
             }
-
-            return new JsonResult(
-                new { Success = true, Data = article },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+            catch (OperationCanceledException)
             {
-                StatusCode = StatusCodes.Status200OK
-            };
+                return StatusCode(499, "Запрос отменен");
+            }
         }
 
         /// <summary>
         /// Получить список разделов
         /// </summary>
         [HttpGet("api/v1/sections")]
-        public async Task<IActionResult> GetSections()
+        public async Task<IActionResult> GetSections(int pageNum = 1, int perPage = 10, CancellationToken ct = default)
         {
-            var sections = await _articleService.GetSections();
-
-            return new JsonResult(
-                new { Success = true, Data = sections },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+            try
             {
-                StatusCode = StatusCodes.Status200OK
-            };
+                var sections = await _articleService.GetSections(pageNum, perPage, ct);
+
+                return new JsonResult(
+                    new { Success = true, Data = sections },
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+                {
+                    StatusCode = StatusCodes.Status200OK
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Запрос отменен");
+            }
         }
 
         /// <summary>
@@ -62,16 +77,28 @@ namespace ArticlesTestTask.Controllers
         /// <param name="sectionId">id раздела</param>
         /// <returns></returns>
         [HttpGet("api/v1/articles/bySection/{sectionId}")]
-        public async Task<IActionResult> GetArticlesBySection(long sectionId)
+        public async Task<IActionResult> GetArticlesBySection(long sectionId, [FromQuery] int pageNum = 1, [FromQuery] int perPage = 10,
+            CancellationToken ct = default)
         {
-            var articles = await _articleService.GetArticlesBySectionId(sectionId);
-
-            return new JsonResult(
-                new { Success = true, Data = articles },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+            try
             {
-                StatusCode = StatusCodes.Status200OK
-            };
+                var articles = await _articleService.GetArticlesBySectionId(sectionId, pageNum, perPage, ct);
+
+                return new JsonResult(
+                    new { Success = true, Data = articles },
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+                {
+                    StatusCode = StatusCodes.Status200OK
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Запрос отменен");
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
         }
 
         /// <summary>
@@ -80,21 +107,31 @@ namespace ArticlesTestTask.Controllers
         /// <param name="item">Модель добавления статьи</param>
         /// <returns></returns>
         [HttpPost("articles")]
-        public async Task<IActionResult> CreateArticle([FromBody] ArticleCreateUpdateRequest item)
+        public async Task<IActionResult> CreateArticle([FromBody] ArticleCreateUpdateRequest item, CancellationToken ct = default)
         {
-            if (item.Tags.Count > 256)
+            if (!ModelState.IsValid)
             {
-                return BadRequest("Допустим ввод не более 256 тегов");
+                return BadRequest(ModelState);
             }
 
-            var article = await _articleService.CreateArticle(item);
-
-            return new JsonResult(
-                new { Success = true, Data = article },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+            try
             {
-                StatusCode = StatusCodes.Status200OK
-            };
+                var article = await _articleService.CreateArticle(item, ct);
+
+                return new JsonResult(new { Success = true, Data = article },
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+                {
+                    StatusCode = StatusCodes.Status200OK
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(499, "Запрос отменен");
+            }
+            catch(DbUpdateConcurrencyException)
+            {
+                return StatusCode(409, "Конфликт параллелизма при добавлении статьи. Сервер не может выполнить запрос");
+            }
         }
 
         /// <summary>
@@ -104,26 +141,36 @@ namespace ArticlesTestTask.Controllers
         /// <param name="item">Модель измененной статьи</param>
         /// <returns></returns>
         [HttpPut("articles/{id}")]
-        public async Task<IActionResult> UpdateArticle(long id, [FromBody] ArticleCreateUpdateRequest item)
+        public async Task<IActionResult> UpdateArticle(long id, [FromBody] ArticleCreateUpdateRequest item, CancellationToken ct = default)
         {
-            if (item.Tags.Count > 256)
+            if (!ModelState.IsValid)
             {
-                return BadRequest("Допустим ввод не более 256 тегов");
+                return BadRequest(ModelState);
             }
 
-            var article = await _articleService.UpdateArticle(id, item);
-
-            if (article == null)
+            try
             {
-                return NotFound();
+                var article = await _articleService.UpdateArticle(id, item, ct);
+
+                if (article == null)
+                {
+                    return NotFound();
+                }
+
+                return new JsonResult(new { Success = true, Data = article },
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+                {
+                    StatusCode = StatusCodes.Status200OK
+                };
             }
-
-            return new JsonResult(
-                new { Success = true, Data = article },
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+            catch (OperationCanceledException)
             {
-                StatusCode = StatusCodes.Status200OK
-            };
+                return StatusCode(499, "Запрос отменен");
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return StatusCode(409, "Конфликт параллелизма при редактировании статьи. Сервер не может выполнить запрос");
+            }
         }
     }
 }

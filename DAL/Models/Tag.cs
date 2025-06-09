@@ -19,6 +19,14 @@ namespace ArticlesTestTask.DAL.Models
         public string Name { get; set; }
 
         /// <summary>
+        /// Название в нижнем регистре для индексации
+        /// </summary>
+        [Column("name_lower")]
+        [Required]
+        [MaxLength(256)]
+        public string NameLower { get; private set; }
+
+        /// <summary>
         /// Список связей Тег-Статья
         /// </summary>
         [MaxLength(256)]
@@ -28,5 +36,11 @@ namespace ArticlesTestTask.DAL.Models
         /// Список разделов у тега
         /// </summary>
         public List<Section> Sections { get; set; } = new List<Section>();
+
+        public void SetName(string name)
+        {
+            Name = name;
+            NameLower = name.ToLowerInvariant();
+        }
     }
 }

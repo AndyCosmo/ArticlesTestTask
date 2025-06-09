@@ -1,14 +1,21 @@
 ﻿using ArticlesTestTask.DAL.Models;
+using ArticlesTestTask.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using System.Reflection.Emit;
 
 namespace ArticlesTestTask.DAL
 {
     public class ArticleContext : DbContext
     {
-        public ArticleContext(DbContextOptions<ArticleContext> options)
+        private readonly IDateTimeService _dateTimeService;
+
+        public ArticleContext(DbContextOptions<ArticleContext> options,
+            IDateTimeService dateTimeService)
         : base(options)
-        { }
+        {
+            _dateTimeService = dateTimeService;
+        }
 
         public override int SaveChanges()
         {
@@ -22,17 +29,21 @@ namespace ArticlesTestTask.DAL
             return await base.SaveChangesAsync();
         }
 
-        //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        //{
-        //
-        //optionsBuilder.UseNpgsql();
-        //}
-
         protected override void OnModelCreating(ModelBuilder builder)
         {
             builder.Entity<Tag>()
-                .HasIndex(u => u.Name)
+                .HasIndex(u => u.NameLower)
                 .IsUnique();
+
+            builder.Entity<Article>()
+                .Property(a => a.LastActivityAt)
+                .HasComputedColumnSql("COALESCE(updated_at, created_at)", true);
+
+            builder.Entity<Article>()
+                .HasIndex(a => new { a.SectionId, a.LastActivityAt });
+
+            builder.Entity<ArticleTag>()
+                .HasKey(at => new { at.ArticleId, at.TagId });
         }
 
         private void AddCreatedUpdatedTimestamps()
@@ -43,12 +54,12 @@ namespace ArticlesTestTask.DAL
             {
                 if (entry.State == EntityState.Added)
                 {
-                    ((BaseModel)entry.Entity).CreatedAt = DateTime.Now;
+                    ((BaseModel)entry.Entity).CreatedAt = _dateTimeService.UtcNow;
                 }
 
                 if (entry.State == EntityState.Modified)
                 {
-                    ((BaseModel)entry.Entity).UpdatedAt = DateTime.Now;
+                    ((BaseModel)entry.Entity).UpdatedAt = _dateTimeService.UtcNow;
                 }
             }
         }

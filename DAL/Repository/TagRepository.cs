@@ -1,17 +1,9 @@
 ﻿using ArticlesTestTask.DAL.Models;
+using ArticlesTestTask.DAL.Repository.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace ArticlesTestTask.DAL.Repository
 {
-    public interface ITagRepository
-    {
-        Task<Tag?> GetById(long id);
-        Task<List<Tag>> GetByIds(List<long> ids);
-        Task<Tag?> GetByLowerName(string name);
-        Task<List<Tag>> GetList();
-        Task<Tag> Create(string name);
-    }
-
     public class TagRepository : ITagRepository
     {
         private readonly ArticleContext _context;
@@ -21,34 +13,21 @@ namespace ArticlesTestTask.DAL.Repository
             _context = context;
         }
 
-        public async Task<Tag?> GetById(long id)
+        public async Task<Tag?> GetByLowerName(string name, CancellationToken ct = default)
         {
-            return await _context.Tags.FindAsync(id);
-        }
+            name = name.ToLower();
 
-        public async Task<List<Tag>> GetByIds(List<long> ids)
-        {
             return await _context.Tags
-                .Where(i => ids.Contains(i.Id))
-                .ToListAsync();
+                .FirstOrDefaultAsync(i => i.NameLower == name, ct);
         }
 
-        public async Task<Tag?> GetByLowerName(string name)
+        public async Task<Tag> Add(string name, CancellationToken ct = default)
         {
-            return await _context.Tags
-                .FirstOrDefaultAsync(i => i.Name.ToLower() == name.ToLower());
-        }
+            var tag = new Tag();
+            tag.SetName(name);
 
-        public async Task<List<Tag>> GetList()
-        {
-            return await _context.Tags.ToListAsync();
-        }
-
-        public async Task<Tag> Create(string name)
-        {
-            var tag = new Tag { Name = name };
-            await _context.Tags.AddAsync(tag);
-            await _context.SaveChangesAsync();
+            await _context.Tags.AddAsync(tag, ct);
+            await _context.SaveChangesAsync(ct);
 
             return tag;
         }

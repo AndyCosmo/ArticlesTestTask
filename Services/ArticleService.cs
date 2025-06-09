@@ -1,38 +1,39 @@
 ﻿using ArticlesTestTask.Contracts.Requests;
 using ArticlesTestTask.Contracts.Responses;
+using ArticlesTestTask.Controllers;
 using ArticlesTestTask.DAL.Models;
-using ArticlesTestTask.DAL.Repository;
-using static System.Collections.Specialized.BitVector32;
+using ArticlesTestTask.DAL.Repository.Interfaces;
+using ArticlesTestTask.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using System.Data;
+using Section = ArticlesTestTask.DAL.Models.Section;
 
 namespace ArticlesTestTask.Services
 {
-    public interface IArticleService
-    {
-        Task<ArticleResponse?> GetArticleById(long id);
-        Task<List<SectionResponse>> GetSections();
-        Task<List<ArticleResponse>> GetArticlesBySectionId(long sectionId);
-        Task<ArticleResponse?> CreateArticle(ArticleCreateUpdateRequest articleRequest);
-        Task<ArticleResponse?> UpdateArticle(long id, ArticleCreateUpdateRequest articleRequest);
-    }
-
     public class ArticleService : IArticleService
     {
         public readonly IArticleRepository _articleRepository;
         public readonly ISectionRepository _sectionRepository;
         public readonly ITagRepository _tagRepository;
+        private readonly ILogger<ArticleService> _logger;
 
+        /// <summary>
+        /// Конструктор
+        /// </summary>
         public ArticleService(IArticleRepository articleRepository,
             ISectionRepository sectionRepository,
-            ITagRepository tagRepository)
+            ITagRepository tagRepository,
+            ILogger<ArticleService> logger)
         {
             _articleRepository = articleRepository;
             _sectionRepository = sectionRepository;
             _tagRepository = tagRepository;
+            _logger = logger;
         }
 
-        public async Task<ArticleResponse?> GetArticleById(long id)
+        public async Task<ArticleResponse?> GetArticleById(long id, CancellationToken ct = default)
         {
-            Article? article = await _articleRepository.GetById(id);
+            Article? article = await _articleRepository.GetById(id, ct);
 
             if (article != null)
             {
@@ -42,32 +43,60 @@ namespace ArticlesTestTask.Services
             return MapToArticleResponse(article);
         }
 
-        public async Task<List<SectionResponse>> GetSections()
+        public async Task<PagedList<SectionResponse>> GetSections(int pageNum = 1, int perPage = 10, CancellationToken ct = default)
         {
-            List<DAL.Models.Section> sections = await _sectionRepository.GetList();
+            List<Section> sections = await _sectionRepository.GetList(pageNum, perPage, ct);
 
-            return sections.Select(MapToSectionResponse).ToList();
+            int? count = null;
+            if (pageNum == 1)
+            {
+                count = await _sectionRepository.GetCount(ct);
+            }
+
+            return new PagedList<SectionResponse>
+            {
+                Items = [.. sections.Select(MapToSectionResponse)],
+                Count = count
+            };
         }
 
-        public async Task<List<ArticleResponse>> GetArticlesBySectionId(long sectionId)
+        public async Task<PagedList<ArticleResponse>> GetArticlesBySectionId(long sectionId, int pageNum = 1, int perPage = 10,
+            CancellationToken ct = default)
         {
-            List<Article> articles = await _articleRepository.GetListBySectionId(sectionId);
+            var sectionExists = await _sectionRepository.Exists(sectionId, ct);
 
-            return articles.Select(MapToArticleResponse).ToList();
+            if (!sectionExists)
+            {
+                throw new KeyNotFoundException("Не найдено раздела с таким идентификатором");
+            }
+
+            List<Article> articles = await _articleRepository.GetListBySectionId(sectionId, pageNum, perPage, ct);
+
+            int? count = null;
+            if (pageNum == 1)
+            {
+                count = await _articleRepository.GetCountBySectionId(sectionId, ct);
+            }
+
+            return new PagedList<ArticleResponse>
+            { 
+                Items = [.. articles.Select(MapToArticleResponse)],
+                Count = count
+            };
         }
 
-        public async Task<ArticleResponse?> CreateArticle(ArticleCreateUpdateRequest articleRequest)
+        public async Task<ArticleResponse?> CreateArticle(ArticleCreateUpdateRequest articleRequest, CancellationToken ct = default)
         {
             // Создадим или найдем теги
-            List<Tag> tags = new();
-            List<long> tagIds = new();
+            List<Tag> tags = [];
+            List<long> tagIds = [];
             foreach (var tagName in articleRequest.Tags)
             {
-                var tag = await _tagRepository.GetByLowerName(tagName);
+                var tag = await _tagRepository.GetByLowerName(tagName, ct);
 
                 if (tag == null)
                 {
-                    tag = await _tagRepository.Create(tagName);
+                    tag = await _tagRepository.Add(tagName, ct);
                 }
 
                 tags.Add(tag);
@@ -80,25 +109,38 @@ namespace ArticlesTestTask.Services
             };
 
             // Создадим статью
-            article = await _articleRepository.Add(article, tagIds);
+            article = await _articleRepository.Add(article, tagIds, ct);
 
             // Создадим или найдем раздел с уникальным набором тегов
-            var section = await _sectionRepository.GetByTagIds(tagIds);
-            if (section == null && tagIds.Count > 0)
+            Section? section = await _sectionRepository.GetByTagIds(tagIds, ct);
+
+            if (section == null)
             {
-                section = await _sectionRepository.Add(tags);
+                article.Section = await _sectionRepository.Add(tags, ct);
+            }
+            else
+            {
+                article.Section = section;
             }
 
-            // Обновим раздел статьи
-            article.Section = section;
-            await _articleRepository.SaveChangesAsync();
+            article.Section.ArticlesCount++; 
+            
+            try
+            {
+                await _articleRepository.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogError($"Конфликт параллелизма при добавлении статьи с id = {article.Id} в раздел {article.Section.Id}. Попробуйте обновить статью еще раз. {ex.Message}");
+                throw;
+            }
 
             return MapToArticleResponse(article);
         }
 
-        public async Task<ArticleResponse?> UpdateArticle(long id, ArticleCreateUpdateRequest articleRequest)
+        public async Task<ArticleResponse?> UpdateArticle(long id, ArticleCreateUpdateRequest articleRequest, CancellationToken ct = default)
         {
-            Article? article = await _articleRepository.GetById(id);
+            Article? article = await _articleRepository.GetById(id, ct);
 
             if (article == null)
             {
@@ -106,15 +148,15 @@ namespace ArticlesTestTask.Services
             }
 
             // Создадим или найдем теги
-            List<Tag> tags = new();
-            List<long> tagIds = new();
+            List<Tag> tags = [];
+            List<long> tagIds = [];
             foreach (var tagName in articleRequest.Tags)
             {
-                var tag = await _tagRepository.GetByLowerName(tagName);
+                var tag = await _tagRepository.GetByLowerName(tagName, ct);
 
                 if (tag == null)
                 {
-                    tag = await _tagRepository.Create(tagName);
+                    tag = await _tagRepository.Add(tagName, ct);
                 }
 
                 tags.Add(tag);
@@ -123,26 +165,51 @@ namespace ArticlesTestTask.Services
 
             // Обновим статью
             article.Name = articleRequest.Name;
-            await _articleRepository.Update(article, tagIds);
+            await _articleRepository.UpdateArticleTags(article, tagIds, ct);
 
             // Создадим или найдем раздел с уникальным набором тегов
-            var section = await _sectionRepository.GetByTagIds(tagIds);
+            Section? section = await _sectionRepository.GetByTagIds(tagIds, ct);
+
             if (section == null)
             {
-                section = await _sectionRepository.Add(tags);
+                article.Section = await _sectionRepository.Add(tags, ct);
+                article.Section.ArticlesCount++;
+
+                try
+                {
+                    await _articleRepository.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    _logger.LogError($"Конфликт параллелизма при редактировании статьи с id = {id}. Попробуйте отредактировать статью еще раз. {ex.Message}");
+                    throw;
+                }
             }
 
-            // Обновим раздел статьи, если он изменился
-            if (article.Section?.Id != section?.Id)
+            // Обновим раздел, если он изменился
+            else if (article.SectionId != section.Id)
             {
+                if (article.Section != null)
+                {
+                    article.Section.ArticlesCount--;
+                }
+
                 article.Section = section;
-                await _articleRepository.SaveChangesAsync();
+                section.ArticlesCount++;
+
+                try
+                {
+                    await _articleRepository.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    _logger.LogError($"Конфликт параллелизма при редактировании статьи с id = {id}. Попробуйте отредактировать статью еще раз. {ex.Message}");
+                    throw;
+                }
 
                 // Удалим раздел, если на него больше никто не ссылается
-                await _sectionRepository.DeleteUnusedSections();
+                await _sectionRepository.DeleteUnusedSections(ct);
             }
-
-            // TODO: удалять теги если на них больше никто не ссылается
 
             return MapToArticleResponse(article);
         }
@@ -158,17 +225,13 @@ namespace ArticlesTestTask.Services
             {
                 Id = article.Id,
                 Name = article.Name,
-                Tags = article.Tags
-                    .OrderBy(i => i.Order)
-                    .Select(i => i.Tag.Name)
-                    .ToList(),
-                SectionId = article.Section?.Id,
+                SectionId = article.SectionId,
                 CreatedAt = article.CreatedAt,
                 UpdatedAt = article.UpdatedAt,
             };
         }
 
-        private SectionResponse? MapToSectionResponse(DAL.Models.Section section)
+        private SectionResponse? MapToSectionResponse(Section section)
         {
             if (section == null)
             {
@@ -179,11 +242,7 @@ namespace ArticlesTestTask.Services
             {
                 Id = section.Id,
                 Name = section.Name,
-                ArticlesCount = section.Articles.Count,
-                Tags = section.Tags
-                    .OrderBy(i => i.Name)
-                    .Select(i => i.Name)
-                    .ToList()
+                ArticlesCount = section.ArticlesCount,
             };
         }
     }

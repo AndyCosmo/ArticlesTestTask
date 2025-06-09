@@ -1,18 +1,9 @@
 ﻿using ArticlesTestTask.DAL.Models;
+using ArticlesTestTask.DAL.Repository.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace ArticlesTestTask.DAL.Repository
 {
-    public interface IArticleRepository
-    {
-        Task<List<Article>> Get();
-        Task<Article?> GetById(long id);
-        Task<List<Article>> GetListBySectionId(long sectionId);
-        Task<Article> Add(Article item, List<long> tagIds);
-        Task Update(Article article, List<long> tagIds);
-        Task SaveChangesAsync();
-    }
-
     public class ArticleRepository : IArticleRepository
     {
         private readonly ArticleContext _context;
@@ -22,33 +13,36 @@ namespace ArticlesTestTask.DAL.Repository
             _context = articleContext;
         }
 
-        public async Task<List<Article>> Get()
-        {
-            return await _context.Articles.ToListAsync();
-        }
-
-        public async Task<Article?> GetById(long id)
+        public async Task<Article?> GetById(long id, CancellationToken ct = default)
         {
             return await _context.Articles
                 .Include(i => i.Tags)
                 .ThenInclude(i => i.Tag)
-                .Include(i => i.Section)
                 .Where(i => i.Id == id)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(ct);
         }
 
-        public async Task<List<Article>> GetListBySectionId(long sectionId)
+        public async Task<int> GetCountBySectionId(long sectionId, CancellationToken ct = default)
         {
             return await _context.Articles
-                .Include(i => i.Tags)
-                .ThenInclude(i => i.Tag)
                 .Include(i => i.Section)
-                .Where(i => i.Section != null && i.Section.Id == sectionId)
-                .OrderByDescending(i => i.UpdatedAt != null ? i.UpdatedAt : i.CreatedAt)
-                .ToListAsync();
+                .Where(i => i.SectionId == sectionId)
+                .CountAsync(ct);
         }
 
-        public async Task<Article> Add(Article article, List<long> tagIds)
+        public async Task<List<Article>> GetListBySectionId(long sectionId, int pageNum = 1, int perPage = 10, CancellationToken ct = default)
+        {
+            return await _context.Articles
+                .Where(i => i.SectionId == sectionId)
+                .OrderByDescending(i => i.LastActivityAt)
+                .ThenBy(i => i.Name)
+                .Skip((pageNum - 1) * perPage)
+                .Take(perPage)
+                .AsNoTracking()
+                .ToListAsync(ct);
+        }
+
+        public async Task<Article> Add(Article article, List<long> tagIds, CancellationToken ct = default)
         {
             article.Tags = new List<ArticleTag>();
 
@@ -62,21 +56,19 @@ namespace ArticlesTestTask.DAL.Repository
                 });
             }
 
-            await _context.Articles.AddAsync(article);
-            await _context.SaveChangesAsync();
+            await _context.Articles.AddAsync(article, ct);
+            await _context.SaveChangesAsync(ct);
 
             return article;
         }
 
-        public async Task SaveChangesAsync()
+        public async Task SaveChangesAsync(CancellationToken ct = default)
         {
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(ct);
         }
 
-        public async Task Update(Article article, List<long> tagIds)
+        public async Task UpdateArticleTags(Article article, List<long> tagIds, CancellationToken ct = default)
         {
-            // TODO: не удалять все связи статьи с тегами, а только те которые убрали?
-
             // Удаляем старые теги
             _context.ArticleTags.RemoveRange(article.Tags);
 
@@ -90,7 +82,7 @@ namespace ArticlesTestTask.DAL.Repository
                 });
             }
 
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(ct);
         }
     }
 }

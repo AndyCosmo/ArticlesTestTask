@@ -6,7 +6,7 @@ namespace ArticlesTestTask.DAL.Models
     /// Промежуточная таблица для связей "Статья-Тег"
     /// </summary>
     [Table("articles_tags")]
-    public class ArticleTag : BaseModel
+    public class ArticleTag
     {
         /// <summary>
         /// Id Статьи

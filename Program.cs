@@ -1,10 +1,9 @@
-using ArticlesTestTask.DAL;
+﻿using ArticlesTestTask.DAL;
 using ArticlesTestTask.DAL.Repository;
+using ArticlesTestTask.DAL.Repository.Interfaces;
 using ArticlesTestTask.Services;
+using ArticlesTestTask.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using System.Configuration;
-using System.Net.NetworkInformation;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,7 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
+
+builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
 
 string? connectionString = builder.Configuration.GetConnectionString("Default");
 builder.Services.AddDbContext<ArticleContext>(x => x.UseNpgsql(connectionString));

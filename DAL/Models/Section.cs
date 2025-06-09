@@ -14,6 +14,7 @@ namespace ArticlesTestTask.DAL.Models
         /// </summary>
         [Column("name")]
         [MaxLength(1024)]
+        [ConcurrencyCheck]
         public string Name { get; set; }
 
         /// <summary>
@@ -26,5 +27,12 @@ namespace ArticlesTestTask.DAL.Models
         /// Список статей
         /// </summary>
         public List<Article> Articles { get; set; } = new List<Article>();
+
+        /// <summary>
+        /// Счетчик статей в разделе
+        /// </summary>
+        [Column("articles_count")]
+        [ConcurrencyCheck]
+        public int ArticlesCount { get; set; }
     }
 }

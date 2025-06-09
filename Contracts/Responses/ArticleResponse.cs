@@ -8,7 +8,6 @@ namespace ArticlesTestTask.Contracts.Responses
     {
         public long Id { get; set; }
         public string Name { get; set; }
-        public List<string> Tags { get; set; }
         public long? SectionId { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
